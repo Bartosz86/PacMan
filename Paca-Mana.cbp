@@ -47,6 +47,8 @@
 			<Add directory="glew/lib" />
 		</Linker>
 		<Unit filename="allmodels.h" />
+		<Unit filename="coin.cpp" />
+		<Unit filename="coin.h" />
 		<Unit filename="constants.h" />
 		<Unit filename="floor.cpp" />
 		<Unit filename="floor.h" />
