@@ -47,6 +47,22 @@ void Map::drawMapInConsole(bool simple) {
                     printf(" O ");
                     break;
                 }
+                case mGHO1: {
+                    printf(" 1 ");
+                    break;
+                }
+                case mGHO2: {
+                    printf(" 2 ");
+                    break;
+                }
+                case mGHO3: {
+                    printf(" 3 ");
+                    break;
+                }
+                case mGHO4: {
+                    printf(" 4 ");
+                    break;
+                }
                 default: {
                     printf(" ? ");
                     break;

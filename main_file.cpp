@@ -54,6 +54,9 @@ Place, Fifth Floor, Boston, MA  02110 - 1301  USA
 #define tghost3 "tekstury/ghost3.png"
 #define tghost4 "tekstury/ghost4.png"
 #define tghostX "tekstury/ghostX.png"
+#define tstart "tekstury/start.png"
+#define tend "tekstury/end.png"
+#define twin "tekstury/win.png"
 
 // definicja klawiszy (latwa zmiana sterowania w kodzie)
 
@@ -73,6 +76,7 @@ Place, Fifth Floor, Boston, MA  02110 - 1301  USA
 #define K_LEFT_SECOND GLFW_KEY_LEFT
 
 // asocjacja klawiszy z indeksami dla tablicy klawiszy...
+#define max_key 32
 #define nop 0
 #define up  1
 #define down  2
@@ -80,27 +84,31 @@ Place, Fifth Floor, Boston, MA  02110 - 1301  USA
 #define right  4
 #define look_back 5
 
+// ustawienia gry
+#define big_coin_number 2
+
 bool CAMERA_PACMAN = true;
 
 using namespace glm;
-
-
 
 // tablica kolizji (aby nie trzymiac wymiarow w poszczegolnych obiektach tylko ogolnie dla danego typu obiektu
 colision_length colision_table[MAX_MODEL_ON_MAP];
 std::vector <glm::vec3> coin_position;
 // potrzbne modele
 struct colision_length unvalue;
-Wall *world = new Wall(unvalue);
-Floor *podloga = new Floor(colision_table[mFLOR]);
-Map *mapa = new Map(colision_table[mWALL],coin_position);
-Player *player = new Player(mapa, colision_table[mPMAN]);
-Coin *coin = new Coin(colision_table[mCOIN]);
-Licznik *licznik = new Licznik(unvalue);
-Ghost *ghost_1 = new Ghost(mapa,colision_table[mGHO1],mGHO1);
-Ghost *ghost_2 = new Ghost(mapa,colision_table[mGHO2],mGHO2);
-Ghost *ghost_3 = new Ghost(mapa,colision_table[mGHO3],mGHO3);
-Ghost *ghost_4 = new Ghost(mapa,colision_table[mGHO4],mGHO4);
+Wall *world;
+Floor *podloga;
+Map *mapa;
+Player *player;
+Coin *coin;
+Licznik *licznik;
+Ghost *ghost_1;
+Ghost *ghost_2;
+Ghost *ghost_3;
+Ghost *ghost_4;
+Wall *ginfo = new Wall(unvalue);
+
+bool fullscreen = false;
 
 float aspect=1.0f; //Aktualny stosunek szerokoœci do wysokoœci okna
 float speed_y=0; //Szybkoœæ k¹towa obrotu obiektu w radianach na sekundê wokó³ osi y
@@ -110,8 +118,11 @@ float camera_angle = 0.4; // odleglosc camery nad PacManem w osi Y
 bool ghost_run = false;
 bool game_start = false;
 bool game_end = false;
+bool game_win = false;
+
+int modulo_coin = 10;
 // tablica dla kawiszy (aby pamietac jakie byly i bezproblemowo robic kombinajce klawiszy)
-bool keys[32];
+bool keys[max_key];
 
 // definicja uchwytow na tekstury
 GLuint texSciana;
@@ -125,6 +136,9 @@ GLuint texGhost2;
 GLuint texGhost3;
 GLuint texGhost4;
 GLuint texGhostX;
+GLuint texStart;
+GLuint texEnd;
+GLuint texWin;
 
 //Procedura obsługi błędów
 void error_callback(int error, const char* description) {
@@ -138,62 +152,109 @@ void windowResize(GLFWwindow* window, int width, int height) {
     aspect=(float)szerokoscOkna/(float)wysokoscOkna; //Stosunek szerokości do wysokości okna
 }
 
+void configGame() {
+    coin_position.clear();
+    for(int i=0; i<max_key; i++) keys[i]=false;
+    game_end = false;
+    game_start = true;
+    game_win = false;
+    ghost_run = false;
+    world = new Wall(unvalue);
+    podloga = new Floor(colision_table[mFLOR]);
+    mapa = new Map(colision_table[mWALL],coin_position);
+    player = new Player(mapa, colision_table[mPMAN]);
+    coin = new Coin(colision_table[mCOIN]);
+    licznik = new Licznik(unvalue);
+    ghost_1 = new Ghost(mapa,colision_table[mGHO1],mGHO1);
+    ghost_2 = new Ghost(mapa,colision_table[mGHO2],mGHO2);
+    ghost_3 = new Ghost(mapa,colision_table[mGHO3],mGHO3);
+    ghost_4 = new Ghost(mapa,colision_table[mGHO4],mGHO4);
+    world->position = vec3(SZEROKOSC_MAPY/2,0.0,WYSOKOSC_MAPY/2);
+    world->scale = vec3(40.0,40.0,40.0);
+    ghost_1->speed = 0.5;
+    ghost_2->speed = 1.0;
+    ghost_3->speed = 1.5;
+    ghost_4->speed = 2.0;
+    modulo_coin = coin_position.size() / (big_coin_number+1);
+}
+
 // funkcja ktora powoduje ruch w kazdym kierunku (po skosie dwa klawisze tez) ogolnie od klawiszy jest
 void doMove(Map* &mapa,colision_length colision_table[],std::vector <glm::vec3> &coin_position) {
     if(keys[up]) goSTRAIGHT(player,mapa,colision_table,coin_position);  // do przodu
-    if(keys[down]) goBACK(player, mapa, colision_table,coin_position);  // do tylu
-    if(keys[right]) rotateRIGHT(player);  // obrot w prawo
-    if(keys[left]) rotateLEFT(player);  // obrot w lewo
+    else if(keys[down]) goBACK(player, mapa, colision_table,coin_position);  // do tylu
+    else if(keys[right]) rotateRIGHT(player);  // obrot w prawo
+    else if(keys[left]) rotateLEFT(player);  // obrot w lewo
     if(keys[left] && keys[up]) {  // po skosie gora/lewo
         rotateLEFT(player);
         goSTRAIGHT(player,mapa,colision_table,coin_position);
-    }
-    if(keys[left] && keys[down]) {  // po skosie dol/lewo
-        rotateRIGHT(player);
-        goBACK(player, mapa, colision_table,coin_position);
-    }
-    if(keys[right] && keys[up]) {  // po skosie gora/prawo
+    } else if(keys[right] && keys[up]) { // po skosie gora/prawo
         rotateRIGHT(player);
         goSTRAIGHT(player,mapa,colision_table,coin_position);
-    }
-    if(keys[right] && keys[down]) {  // po skosie dol/prawo
+    } else if(keys[right] && keys[down]) { // po skosie dol/prawo
         rotateLEFT(player);
+        goBACK(player, mapa, colision_table,coin_position);
+    } else if(keys[left] && keys[down]) { // po skosie dol/lewo
+        rotateRIGHT(player);
         goBACK(player, mapa, colision_table,coin_position);
     }
 }
 
 //Procedura obsługi klawiatury
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if(action == GLFW_PRESS) {
-        if(key == kleft) keys[left] = true;
-        if(key == kright) keys[right] = true;
-        if(key == kup) keys[up] = true;
-        if(key == kdown) keys[down] = true;
-        if(key == klook_back) keys[look_back] = true;
-        if(key == K_CAMERA_PACMAN) CAMERA_PACMAN = true;
-        if(key == K_CAMERA_UP) CAMERA_PACMAN = false;
-        if(KEY_SECOND) {
-            if(key == K_LEFT_SECOND) keys[left] = true;
-            if(key == K_RIGHT_SECOND) keys[right] = true;
-            if(key == K_UP_SECOND) keys[up] = true;
-            if(key == K_DOWN_SECOND) keys[down] = true;
+    if(action == GLFW_PRESS && key == GLFW_KEY_F) {
+        const GLFWvidmode * mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+        int window_width = mode->width;
+        int window_height = mode->height;
+        int refresh = mode->refreshRate;
+        if(fullscreen) {
+            glfwSetWindowMonitor(window,NULL,50,50,szerokoscOkna,wysokoscOkna,GLFW_DONT_CARE);
+            glfwSetWindowSize(window, szerokoscOkna, wysokoscOkna);
+            fullscreen = false;
+        } else {
+            int black = (window_width-window_height)/2;
+            glfwSetWindowSize(window, window_height, window_height);
+            glfwSetWindowMonitor(window,glfwGetPrimaryMonitor(),black,0,window_height,window_height,refresh);
+            fullscreen = true;
         }
     }
-    if(action == GLFW_RELEASE) {
-        if(key == kleft) keys[left] = false;
-        if(key == kright) keys[right] = false;
-        if(key == kup) keys[up] = false;
-        if(key == kdown) keys[down] = false;
-        if(key == klook_back) keys[look_back] = false;
-        if(KEY_SECOND) {
-            if(key == K_LEFT_SECOND) keys[left] = false;
-            if(key == K_RIGHT_SECOND) keys[right] = false;
-            if(key == K_UP_SECOND) keys[up] = false;
-            if(key == K_DOWN_SECOND) keys[down] = false;
+    if(game_start==false) {
+        if(key == GLFW_KEY_ENTER) game_start=true;
+    } else {
+        if(game_end==true) {
+            if(key == GLFW_KEY_ENTER) glfwSetWindowShouldClose(window, 1);
+            if(key == GLFW_KEY_SPACE) configGame();
+        } else {
+            if(action == GLFW_PRESS) {
+                if(key == kleft) keys[left] = true;
+                if(key == kright) keys[right] = true;
+                if(key == kup) keys[up] = true;
+                if(key == kdown) keys[down] = true;
+                if(key == klook_back) keys[look_back] = true;
+                if(key == K_CAMERA_PACMAN) CAMERA_PACMAN = true;
+                if(key == K_CAMERA_UP) CAMERA_PACMAN = false;
+                if(KEY_SECOND) {
+                    if(key == K_LEFT_SECOND) keys[left] = true;
+                    if(key == K_RIGHT_SECOND) keys[right] = true;
+                    if(key == K_UP_SECOND) keys[up] = true;
+                    if(key == K_DOWN_SECOND) keys[down] = true;
+                }
+            }
+            if(action == GLFW_RELEASE) {
+                if(key == kleft) keys[left] = false;
+                if(key == kright) keys[right] = false;
+                if(key == kup) keys[up] = false;
+                if(key == kdown) keys[down] = false;
+                if(key == klook_back) keys[look_back] = false;
+                if(KEY_SECOND) {
+                    if(key == K_LEFT_SECOND) keys[left] = false;
+                    if(key == K_RIGHT_SECOND) keys[right] = false;
+                    if(key == K_UP_SECOND) keys[up] = false;
+                    if(key == K_DOWN_SECOND) keys[down] = false;
+                }
+            }
         }
     }
 }
-
 // inicjalizacja swiatla na mapie
 void LetItBeLight() {
     GLfloat ambientLight[] = { 0.1f, 0.1f, 0.1f, 1.0f }; // otoczenia
@@ -214,7 +275,6 @@ void LetItBeLight() {
     glLightfv(GL_LIGHT1, GL_SPECULAR, specularLight);
     glLightfv(GL_LIGHT1, GL_POSITION, position1);
 }
-
 void wczytajObraz(GLuint &tex, std::string path) {
     std::vector<unsigned char> image; //Alokuj wektor do wczytania obrazka
     unsigned width, height; //Zmienne do których wczytamy wymiary obrazka
@@ -235,7 +295,6 @@ void wczytajObraz(GLuint &tex, std::string path) {
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_NORMALIZE);
 }
-
 //Procedura inicjuj¹ca
 void initOpenGLProgram(GLFWwindow* window) {
     //************Tutaj umieszczaj kod, który nale¿y wykonaæ raz, na pocz¹tku programu************
@@ -266,17 +325,47 @@ void initOpenGLProgram(GLFWwindow* window) {
     wczytajObraz(texGhost4, tghost4);
     /// -> Wczytaj obrazek - ghostX
     wczytajObraz(texGhostX, tghostX);
-    /// ^^^^^^
-    /// ustawienie pozycji swiata? (gwiazd)
-    world->position = vec3(SZEROKOSC_MAPY/2,0.0,WYSOKOSC_MAPY/2);
-    world->scale = vec3(40.0,40.0,40.0);
+    /// -> Wczytaj obrazek - start
+    wczytajObraz(texStart, tstart);
+    /// -> Wczytaj obrazek - end
+    wczytajObraz(texEnd, tend);
+    /// -> Wczytaj obrazek - win
+    wczytajObraz(texWin, twin);
 }
-
-//Procedura rysuj¹ca zawartoœæ sceny
-void drawScene(GLFWwindow* window) {
-    //************Tutaj umieszczaj kod rysuj¹cy obraz******************l
+void drawInfo(GLFWwindow* window,GLuint tex) {
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); //Wyczyœæ bufor kolorów (czyli przygotuj "p³ótno" do rysowania)
-    //***Przygotowanie do rysowania****
+    mat4 P=perspective(35.0f*PI/180.0f,aspect,1.0f,50.0f); //Wylicz macierz rzutowania P
+    mat4 V; // macierz widoku
+    V = lookAt(vec3(0.0,0.0,-2.3),
+               vec3(0.0,0.0,0.0),
+               vec3(0.0,1.0,0.0));
+    glMatrixMode(GL_PROJECTION); //W³¹cz tryb modyfikacji macierzy rzutowania
+    glLoadMatrixf(value_ptr(P)); //Za³aduj macierz rzutowania
+    glMatrixMode(GL_MODELVIEW);  //W³¹cz tryb modyfikacji macierzy model-widok
+    /// Rysowanie
+    ginfo->position = vec3(0.0f,0.0f,0.0f);
+    ginfo->rotation = vec3(0.0f,0.0f,PI/2);
+    ginfo->drawSolid(tex,V);
+    glfwSwapBuffers(window);
+}
+void drawEnd(GLFWwindow* window) {
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); //Wyczyœæ bufor kolorów (czyli przygotuj "p³ótno" do rysowania)
+    mat4 P=perspective(35.0f*PI/180.0f,aspect,1.0f,50.0f); //Wylicz macierz rzutowania P
+    mat4 V; // macierz widoku
+    V = lookAt(vec3(0.0,0.0,-2.3),
+               vec3(0.0,0.0,0.0),
+               vec3(0.0,1.0,0.0));
+    glMatrixMode(GL_PROJECTION); //W³¹cz tryb modyfikacji macierzy rzutowania
+    glLoadMatrixf(value_ptr(P)); //Za³aduj macierz rzutowania
+    glMatrixMode(GL_MODELVIEW);  //W³¹cz tryb modyfikacji macierzy model-widok
+    /// Rysowanie
+    ginfo->position = vec3(0.0f,0.0f,0.0f);
+    ginfo->rotation = vec3(0.0f,0.0f,PI/2);
+    ginfo->drawSolid(texStart,V);
+    glfwSwapBuffers(window);
+}
+void drawGame(GLFWwindow* window) {
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT); //Wyczyœæ bufor kolorów (czyli przygotuj "p³ótno" do rysowania)
     vec3 licznik_1_pos;
     vec3 licznik_2_pos;
     vec3 camera_position;
@@ -352,10 +441,8 @@ void drawScene(GLFWwindow* window) {
         ghost_4->drawSolid(texGhost4,V);
     }
     licznik->drawAll(texLicznik,V,licznik_1_pos,licznik_2_pos,coin_position.size());
-    //Przerzuæ tylny bufor na przedni
     glfwSwapBuffers(window);
 }
-
 //usuwanie obiektow
 void usunObiekty() {
     delete player;
@@ -369,34 +456,50 @@ void usunObiekty() {
     delete ghost_3;
     delete ghost_4;
 }
-
 bool checkLooser(Map* &mapa,colision_length colision_table[]) {
+    //GHO1
+    float odleglosc_krytyczna = colision_table[mPMAN].toX + colision_table[mGHO1].toX;
     float odleglosc = sqrt(pow(player->position.x + colision_table[mPMAN].toX - ghost_1->position.x - colision_table[mGHO1].toX, 2)
-                            + pow(player->position.z + colision_table[mPMAN].toZ - ghost_1->position.z - colision_table[mGHO1].toZ, 2));
-    if(odleglosc < mODLE)
-        return true;
-
+                           + pow(player->position.z + colision_table[mPMAN].toZ - ghost_1->position.z - colision_table[mGHO1].toZ, 2));
+    if(odleglosc < odleglosc_krytyczna) {
+        if(ghost_run) {
+            ghost_1->position = ghost_1->default_position;
+        } else return true;
+    }
+    //GHO2
+    odleglosc_krytyczna = colision_table[mPMAN].toX + colision_table[mGHO2].toX;
     odleglosc = sqrt(pow(player->position.x + colision_table[mPMAN].toX - ghost_2->position.x - colision_table[mGHO1].toX, 2)
-                            + pow(player->position.z + colision_table[mPMAN].toZ - ghost_2->position.z - colision_table[mGHO1].toZ, 2));
-    if(odleglosc < mODLE)
-        return true;
-
+                     + pow(player->position.z + colision_table[mPMAN].toZ - ghost_2->position.z - colision_table[mGHO1].toZ, 2));
+    if(odleglosc < odleglosc_krytyczna) {
+        if(ghost_run) {
+            ghost_2->position = ghost_2->default_position;
+        } else return true;
+    }
+    //GHO3
+    odleglosc_krytyczna = colision_table[mPMAN].toX + colision_table[mGHO3].toX;
     odleglosc = sqrt(pow(player->position.x + colision_table[mPMAN].toX - ghost_3->position.x - colision_table[mGHO1].toX, 2)
-                            + pow(player->position.z + colision_table[mPMAN].toZ - ghost_3->position.z - colision_table[mGHO1].toZ, 2));
-    if(odleglosc < mODLE)
-        return true;
-
+                     + pow(player->position.z + colision_table[mPMAN].toZ - ghost_3->position.z - colision_table[mGHO1].toZ, 2));
+    if(odleglosc < odleglosc_krytyczna) {
+        if(ghost_run) {
+            ghost_3->position = ghost_3->default_position;
+        } else return true;
+    }
+    //GHO4
+    odleglosc_krytyczna = colision_table[mPMAN].toX + colision_table[mGHO4].toX;
     odleglosc = sqrt(pow(player->position.x + colision_table[mPMAN].toX - ghost_4->position.x - colision_table[mGHO1].toX, 2)
-                            + pow(player->position.z + colision_table[mPMAN].toZ - ghost_4->position.z - colision_table[mGHO1].toZ, 2));
-    if(odleglosc < mODLE)
-        return true;
-
+                     + pow(player->position.z + colision_table[mPMAN].toZ - ghost_4->position.z - colision_table[mGHO1].toZ, 2));
+    if(odleglosc < odleglosc_krytyczna) {
+        if(ghost_run) {
+            ghost_4->position = ghost_4->default_position;
+        } else return true;
+    }
     return false;
 }
-
 int main(void) {
+    configGame();
+    game_start = false; // pierwsze rozpoczecie gry
     mapa->drawMapInConsole(true);
-    srand (time(NULL));
+    srand(time(NULL));
     GLFWwindow* window; //WskaŸnik na obiekt reprezentuj¹cy okno
     glfwSetErrorCallback(error_callback);//Zarejestruj procedurê obs³ugi b³êdów
     if(!glfwInit()) {  //Zainicjuj bibliotekê GLFW
@@ -418,29 +521,44 @@ int main(void) {
     initOpenGLProgram(window); //Operacje inicjuj¹ce
     glfwSetTime(0); //Wyzeruj timer
     //G³ówna pêtla
+    // ustawienie duszkow
     while(!glfwWindowShouldClose(window)) {  //Tak d³ugo jak okno nie powinno zostaæ zamkniête
-        if(coin_position.empty()){
-            ghost_run = true;
-            game_end = true;
+        if(game_start==false) {
+            drawInfo(window,texStart);
+        } else {
+            if(game_end==false) {
+                if(coin_position.size() % modulo_coin == 0) {
+                    ghost_run = true;
+                } else {
+                    ghost_run = false;
+                }
+                if(coin_position.empty()) {
+                    ghost_run = true;
+                    game_win = true;
+                    game_end = true;
+                }
+                if(checkLooser(mapa, colision_table)) {
+                    game_end = true;
+                    game_win = false;
+                }
+                doMove(mapa, colision_table, coin_position);
+                ghost_1->doGhostMove(mapa, colision_table);
+                ghost_2->doGhostMove(mapa, colision_table);
+                ghost_3->doGhostMove(mapa, colision_table);
+                ghost_4->doGhostMove(mapa, colision_table);
+                coin->rotation_temp += (float)(glfwGetTime()*coin->speed);
+                coin->rotation_temp = (float)(coin->rotation_temp - 2*PI*(ceil(coin->rotation_temp/(2*PI))));
+                coin->rotation.y = coin->rotation_temp;
+                glfwSetTime(0); //Wyzeruj timer
+                drawGame(window); //Wykonaj procedurê rysuj¹c¹
+            } else {
+                if(game_win) {
+                    drawInfo(window,texWin);
+                } else {
+                    drawInfo(window,texEnd);
+                }
+            }
         }
-
-        if(checkLooser(mapa, colision_table)) {
-            printf("PRZEGRALES!\n");
-            game_end = true;
-            // akcja na zakończenie
-        }
-
-        doMove(mapa, colision_table, coin_position);
-//        ghost_1->doGhostMove(mapa, colision_table);
-//        ghost_2->doGhostMove(mapa, colision_table);
-//        ghost_3->doGhostMove(mapa, colision_table);
-//        ghost_4->doGhostMove(mapa, colision_table);
-
-        coin->rotation_temp += (float)(glfwGetTime()*coin->speed);
-        coin->rotation_temp = (float)(coin->rotation_temp - 2*PI*(ceil(coin->rotation_temp/(2*PI))));
-        coin->rotation.y = coin->rotation_temp;
-        glfwSetTime(0); //Wyzeruj timer
-        drawScene(window); //Wykonaj procedurê rysuj¹c¹
         glfwPollEvents(); //Wykonaj procedury callback w zaleznoœci od zdarzeñ jakie zasz³y.
     }
     //Usuniecie obiektow
@@ -461,4 +579,3 @@ int main(void) {
     glfwTerminate(); //Zwolnij zasoby zajête przez GLFW
     exit(EXIT_SUCCESS);
 }
-

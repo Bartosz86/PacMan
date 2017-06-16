@@ -35,6 +35,8 @@ void Wall::drawSolid(GLuint &tex,mat4 &V) {
     glShadeModel(GL_SMOOTH);
     mat4 M=mat4(1.0f);
     M=translate(M,this->position);
+    M=glm::scale(M,this->scale);
+    M=rotate(M,this->rotation.z,vec3(0.0,0.0,1.0));
     glLoadMatrixf(value_ptr(V*M));
     glVertexPointer(3,GL_FLOAT,0,&(this->TEMPvertices[0]));
     glNormalPointer(GL_FLOAT,sizeof(float)*3,&(this->TEMPnormals[0]));

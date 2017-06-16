@@ -28,7 +28,6 @@ Place, Fifth Floor, Boston, MA  02110 - 1301  USA
 #define mGHO2 5
 #define mGHO3 6
 #define mGHO4 7
-#define mODLE 0.5
 
 const float PI = 3.141592653589793f;
 const int WYSOKOSC_MAPY = 17;

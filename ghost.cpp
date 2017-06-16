@@ -20,7 +20,8 @@ Ghost::Ghost(Map* &mapa,colision_length &colision_length,int id) {
     rotation = vec3(0.0,0.0,0.0);
     scale = vec3(1.0,1.0,1.0);
     speed = 2;
-    rotation_speed = PI/2;
+    obrot = abs((int)(rotation.y/((PI-0.1f)/2)));
+    rotation_speed = PI;
     struct colision_length unusable;
     res = loadOBJ(mGhost2, this->TEMPvertices2, this->TEMPuvs2, this->TEMPnormals2,this->TEMPvCount2,unusable);
     if(!res) {
@@ -34,8 +35,8 @@ Ghost::Ghost(Map* &mapa,colision_length &colision_length,int id) {
     rotation_temp = rotation2.y;
     findPosition(mapa,id);
     ID = id;
-    oldPZ = 0;
-    oldPX = 0;
+    oldPZ = -1;
+    oldPX = -1;
 }
 
 Ghost::~Ghost() {
@@ -53,6 +54,8 @@ void Ghost::findPosition(Map* &mapa,int id) {
         for(int j=0; j<SZEROKOSC_MAPY; j++) {
             if(mapa->mapa[i][j] == id) {
                 this->position = vec3((float)i,0.75,(float)j);
+                this->default_position = this->position;
+                break;
             }
         }
     }
@@ -129,16 +132,14 @@ void Ghost::doGhostMove(Map* &mapa,colision_length colision_table[]) {
     int pz = (int)(this->position.z+0.5f);
 
     // mamy nowy kafelek
-    if(px != oldPX && pz != oldPZ) {
+    if(fabs(this->position.x - oldPX) > 1.0 || fabs(this->position.z - oldPZ) > 1.0) {
         // Zaznaczenie zmiany położenia
         oldPX = px;
         oldPZ = pz;
         oldRotation = rotation.y;
-
         // UP - RIGHT - DOWN - LEFT
         bool kierunki[4] = {false, false, false, false};
         int mozliwosci = 0;
-
         if(mapa->mapa[px+1][pz] != mWALL) { // UP
             kierunki[0] = true;
             mozliwosci++;
@@ -155,119 +156,78 @@ void Ghost::doGhostMove(Map* &mapa,colision_length colision_table[]) {
             kierunki[3] = true;
             mozliwosci++;
         }
-
-        printf("%d %d %d %d \n", kierunki[0], kierunki[1], kierunki[2], kierunki[3]);
-
-        // Losowanie numeru
-        int losowanie = rand() % mozliwosci + 1;
-        printf("los = %d \n", losowanie);
-
         // Obliczenie obrotu
-        int obrot = abs((int)(rotation.y/(PI/2)));
-
+        obrot = abs((int)(rotation.y/((PI-0.1f)/2)));
         // Przegląd
-        while(losowanie > 0) {
-            for(int i = 0; i < 4; i++) {
-                if(kierunki[i]) {
-                    losowanie--;
-                    przemieszczenieID = i;
+        // proby aby nie szedl do tylu za czesto
+        int proby = 3;
+        while(proby>0) {
+            int losowanie = rand() % mozliwosci ; // losowanie numeru kierunku
+            int iter = 0;
+            while(losowanie >= 0) { // poki mamy numer ;p
+                while(kierunki[iter]==false) { // po tablicy poki falsz (nie mozna tam isc)
+                    iter=(iter+1)%4;
                 }
-
-                if(losowanie == 0)
-                    break;
+                losowanie--; // jak mozna to odhaczamy ze bylismy
+                przemieszczenieID = iter; // wskauzjemy na ta droge
+                iter=(iter+1)%4;
             }
+            przemieszczenieID = (przemieszczenieID +4- obrot) % 4; // uzupelniamy o obrot
+            proby--;
+            if(przemieszczenieID != 2) { // gdy nie do tylu to wychodzimy z petli
+                break;
+            }
+            // a jak nie to jeszcze raz moze sie uda nie 2 wylosowac
         }
-
-        printf("przemieszcz = %d \n", przemieszczenieID);
-        printf("obrot = %d \n", obrot);
-        przemieszczenieID = (przemieszczenieID + obrot) % 4;
-        printf("przemieszcz = %d \n", przemieszczenieID);
     } else {
         // Kontynuacja ruchu
-        switch (przemieszczenieID) {
-            case 0: {
-                goGhostSTRAIGHT(this, mapa, colision_table);
-                break;
-            }
-            case 1: {
-                if(fabs(fabs(oldRotation) - fabs(rotation.y)) < ((PI-0.01f)/2)) {
-                    rotateGhostRIGHT(this);
-                } else {
-                    goGhostSTRAIGHT(this, mapa, colision_table);
-                }
-                break;
-            }
-            case 2: {
-                goGhostBACK(this, mapa, colision_table);
-                break;
-            }
-            case 3: {
-                if(fabs(fabs(oldRotation) - fabs(rotation.y)) < ((PI-0.01f)/2)) {
-                    rotateGhostLEFT(this);
-                } else {
-                    goGhostSTRAIGHT(this, mapa, colision_table);
-                }
-                break;
-            }
-        }
-
-        if(checkCollision(mapa, colision_table)) {
-            oldPX = -1;
-            oldPZ = -1;
-        }
-    }
-}
-
-bool Ghost::checkCollision(Map* &mapa,colision_length colision_table[]) {
-//    printf("test\n");
-    int px = (int)(this->position.x+0.5f);
-    int pz = (int)(this->position.z+0.5f);
-
-    int tryb = (przemieszczenieID + abs((int)(rotation.y/(PI/2)))) % 4;
-    printf("%d\n", tryb);
-
-    switch(tryb) {
+        int temp_obrot;
+        switch(przemieszczenieID) {
         case 0: {
-            if(mapa->mapa[px+1][pz] == mWALL) {
-                if(colision_table[mapa->mapa[px+1][pz]].toX + colision_table[ID].toX >= fabs((px+1)-this->position.x)) {
-                    return true;
-                }
-            }
+            // ustalenie kierunku aby po ilus tam obrotach nie chodzil po skosie
+            this->rotation.y = -(abs((int)(rotation.y/((PI-0.2f)/2))))*(PI/2);
+            goGhostSTRAIGHT(this, mapa, colision_table);
             break;
         }
         case 1: {
-            if(mapa->mapa[px][pz+1] == mWALL) {
-                if(colision_table[mapa->mapa[px][pz+1]].toZ + colision_table[ID].toZ >= fabs((pz+1)-this->position.z)) {
-                    return true;
-                }
+            // dodatkowy warunek w ifie bo jak byl obrot o  z 1st na 350 stopni to sie sypalo bo roznica byla wieksza niz 90 st...
+            if((fabs(fabs(oldRotation) - fabs(rotation.y)) < ((PI-0.01f)/2))
+                    || (fabs(fabs(oldRotation) - fabs(rotation.y)) > (2*PI-((PI-0.01f)/2)))) {
+                rotateGhostRIGHT(this);
+            } else {
+                // ustalenie kierunku aby po ilus tam obrotach nie chodzil po skosie
+                this->rotation.y = -(abs((int)(rotation.y/((PI-0.2f)/2))))*(PI/2);
+                goGhostSTRAIGHT(this, mapa, colision_table);
             }
             break;
         }
         case 2: {
-            if(mapa->mapa[px-1][pz] == mWALL) {
-                if(colision_table[mapa->mapa[px-1][pz]].toX + colision_table[ID].toX >= fabs((px-1)-this->position.x)) {
-                    return true;
-                }
-            }
+            // ustalenie kierunku aby po ilus tam obrotach nie chodzil po skosie
+            this->rotation.y = -(abs((int)(rotation.y/((PI-0.2f)/2))))*(PI/2);
+            goGhostBACK(this, mapa, colision_table);
             break;
         }
         case 3: {
-            if(mapa->mapa[px][pz-1] == mWALL) {
-                if(colision_table[mapa->mapa[px][pz-1]].toZ + colision_table[ID].toZ >= fabs((pz-1)-this->position.z)) {
-                    return true;
-                }
+            // dodatkowy warunek w ifie bo jak byl obrot o  z 1st na 350 stopni to sie sypalo bo roznica byla wieksza niz 90 st...
+            if((fabs(fabs(oldRotation) - fabs(rotation.y)) < ((PI-0.01f)/2))
+                    || (fabs(fabs(oldRotation) - fabs(rotation.y)) > (2*PI-((PI-0.01f)/2)))) {
+                rotateGhostLEFT(this);
+            } else {
+                // ustalenie kierunku aby po ilus tam obrotach nie chodzil po skosie
+                this->rotation.y = -(abs((int)(rotation.y/((PI-0.2f)/2))))*(PI/2);
+                goGhostSTRAIGHT(this, mapa, colision_table);
             }
             break;
         }
+        }
+        WallDetect(mapa,colision_table);
     }
-
-    return false;
 }
 
 void Ghost::WallDetect(Map* &mapa,colision_length colision_table[]) {
     /*
         SCHEMAT DETEKCJI SCIAN
-  X ^
+    X ^
     |   ________   ________   ________
     |  |        | |        | |        |
     |  |        | |        | |        |

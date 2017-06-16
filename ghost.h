@@ -12,6 +12,7 @@ public:
     void WallDetect(Map* &mapa, colision_length colision_table[]);
 
     float rotation_speed;
+    vec3 default_position;
 
     std::vector< float > TEMPvertices2;
     std::vector< float > TEMPuvs2;
@@ -28,6 +29,7 @@ private:
     int ID;
     int oldPX;
     int oldPZ;
+    int obrot;
     float oldRotation;
     int przemieszczenieID;
     void findPosition(Map* &mapa,int id);
